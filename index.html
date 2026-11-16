@@ -25,7 +25,7 @@ details{background:var(--s1);border:1px solid var(--ln);border-radius:12px;paddi
 .pm{width:26px;height:26px;border-radius:50%;background:#0b0c0b;border:1.5px solid var(--lime);display:flex;align-items:center;justify-content:center;font-size:14px}
 textarea{width:100%;height:90px;background:var(--s2);color:var(--tx);border:1px solid var(--ln);border-radius:10px}
 </style></head><body>
-<header><h1>PACE<b>PATH</b></h1><span class="mu">Plan Your Route. Conquer Your Limits. v4</span></header>
+<header><h1>PACE<b>PATH</b></h1><span class="mu">Plan Your Route. Conquer Your Limits. v5</span></header>
 <div id="map"></div>
 <div id="panel">
 <details id="kd"><summary>API key OpenRouteService (opsional)</summary>
@@ -107,7 +107,7 @@ async function route(){
     const kf=cd[cd.length-1]>0?dist/cd[cd.length-1]:1;cd=cd.map(v=>v*kf);
     R={c,cd,dist,asc:ascO!=null?ascO:asc,desc:descO!=null?descO:desc,mg};
     line=L.polyline(c.map(q=>[q[1],q[0]]),{color:"#c6f432",weight:5}).addTo(map);
-    if(wps.length===2)map.fitBounds(line.getBounds(),{padding:[30,30]});
+    if(wps.length===2)map.fitBounds(line.getBounds(),{padding:[30,30],maxZoom:16});
     msg("Rute siap (sumber: "+src+"). Mencari masjid, SPBU, dan toko...");show();
     getPois(my);
   }catch(e){if(my===busy){msg(e.message||"Gagal terhubung. Cek internet.");show()}}
@@ -139,7 +139,7 @@ function chart(){
 }
 function show(){
   $("out").hidden=!R;if(!R)return;
-  $("sDist").textContent=R.dist.toFixed(1)+" km";$("sAsc").textContent=Math.round(R.asc)+" m";$("sDesc").textContent=Math.round(R.desc)+" m";
+  $("sDist").textContent=R.dist<1?Math.round(R.dist*1000)+" m":R.dist.toFixed(1)+" km";$("sAsc").textContent=Math.round(R.asc)+" m";$("sDesc").textContent=Math.round(R.desc)+" m";
   const sc=R.dist*ACT[act][3]/15+R.asc/250+R.mg/3,cat=sc<5?"Easy":sc<10?"Moderate":sc<16?"Hard":"Extreme";
   $("dif").textContent="Tingkat kesulitan: "+cat;
   $("why").textContent=R.dist.toFixed(1)+" km untuk "+ACT[act][0]+". Ascent "+Math.round(R.asc)+" m ("+(R.dist?(R.asc/R.dist).toFixed(0):0)+" m per km). Tanjakan terjal sekitar "+R.mg.toFixed(1)+"%. Jenis permukaan belum dinilai.";
