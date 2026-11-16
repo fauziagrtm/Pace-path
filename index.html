@@ -1,0 +1,155 @@
+<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>PACEPATH</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--bg:#0b0c0b;--s1:#151715;--s2:#202320;--ln:#2e322e;--tx:#f3f5f1;--mu:#8e968c;--lime:#c6f432;color-scheme:dark}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+header{padding:6px 12px;display:flex;justify-content:space-between;align-items:baseline}
+h1{margin:0;font:800 26px "Arial Narrow",system-ui,sans-serif;letter-spacing:.03em}h1 b{color:var(--lime)}
+#map{height:46vh;flex:none;background:#111}
+.leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.5)}
+#panel{flex:1;overflow:auto;padding:8px 12px calc(24px + env(safe-area-inset-bottom))}
+.mu{color:var(--mu);font-size:13px}.row{display:flex;gap:6px;margin:6px 0;align-items:center}
+input{background:var(--s2);color:var(--tx);border:1px solid var(--ln);border-radius:10px;padding:10px;font:inherit;width:100%;min-width:0}
+.b{background:var(--lime);color:#0b0c0b;border:0;border-radius:10px;padding:10px 12px;font:600 14px system-ui;white-space:nowrap}.b.o{background:var(--s2);color:var(--tx);border:1px solid var(--ln)}
+.chip{border:1px solid var(--ln);background:var(--s2);color:var(--tx);border-radius:20px;padding:7px 12px;font:600 13px system-ui}.chip.on{background:var(--lime);color:#0b0c0b;border-color:var(--lime)}
+.g{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}
+.st{background:var(--s2);border-radius:10px;padding:8px}.st b{display:block;font:800 20px "Arial Narrow",system-ui}.st span{font-size:11px;color:var(--mu)}
+.card{background:var(--s1);border:1px solid var(--ln);border-radius:14px;padding:10px;margin:8px 0}h3{margin:0 0 4px;font-size:16px}
+.pr{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--ln)}.pr input{width:64px;text-align:center}.pr small{display:block;color:var(--mu)}
+svg{width:100%;height:auto;display:block;background:var(--s2);border-radius:10px}
+details{background:var(--s1);border:1px solid var(--ln);border-radius:12px;padding:8px 10px}summary{font-weight:600}
+.wp{width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid #0b0c0b;box-shadow:0 0 0 2px var(--lime)}.wp.s{background:var(--lime)}
+.pm{width:26px;height:26px;border-radius:50%;background:#0b0c0b;border:1.5px solid var(--lime);display:flex;align-items:center;justify-content:center;font-size:14px}
+textarea{width:100%;height:90px;background:var(--s2);color:var(--tx);border:1px solid var(--ln);border-radius:10px}
+</style></head><body>
+<header><h1>PACE<b>PATH</b></h1><span class="mu">Plan Your Route. Conquer Your Limits.</span></header>
+<div id="map"></div>
+<div id="panel">
+<details id="kd"><summary>API key OpenRouteService</summary>
+<div class="row"><input id="key" placeholder="Tempel API key di sini"><button id="ksave" class="b">Simpan</button></div>
+<p class="mu">Key hanya tersimpan di browser HP ini dan hanya dikirim ke OpenRouteService.</p></details>
+<div class="row"><input id="q" placeholder="Cari tempat, mis. Lembang"><button id="go" class="b o">Cari</button><button id="loc" class="b o">📍</button></div>
+<div class="row" id="chips" style="flex-wrap:wrap"></div>
+<div class="row"><button id="undo" class="b o">Urungkan</button><button id="clr" class="b o">Hapus</button><button id="lp" class="b o">Loop: mati</button></div>
+<div id="msg" class="mu">Ketuk peta untuk titik awal, lalu titik berikutnya. Rute otomatis mengikuti jalan. Titik bisa digeser.</div>
+<div id="out" hidden>
+<div class="g"><div class="st"><b id="sDist"></b><span>Jarak</span></div><div class="st"><b id="sAsc"></b><span>Ascent</span></div><div class="st"><b id="sDesc"></b><span>Descent</span></div>
+<div class="st"><b id="sMove"></b><span>Waktu bergerak</span></div><div class="st"><b id="sRest"></b><span>Istirahat</span></div><div class="st"><b id="sFin"></b><span>Estimasi finish</span></div></div>
+<div class="row"><div style="flex:1"><div class="mu">Kecepatan (km/j)</div><input id="spd" type="number" inputmode="decimal" min="3"></div><div style="flex:1"><div class="mu">Jam mulai</div><input id="t0" type="time" value="06:00"></div></div>
+<div class="card"><h3 id="dif"></h3><div id="why" class="mu"></div></div>
+<div class="card"><h3>Grafik elevasi</h3><div id="chart"></div></div>
+<div class="card"><h3>Fasilitas di sepanjang rute</h3><div class="mu" id="pinfo"></div><div id="pl"></div></div>
+<div class="card"><h3>Suasana jalur</h3><div class="mu">Data kepadatan belum tersedia untuk rute ini (abu-abu). Data hanya akan ditampilkan jika sudah ada sumbernya.</div></div>
+<div class="row"><button id="dl" class="b" style="flex:1">Download GPX</button><button id="sh" class="b o">Bagikan</button><button id="cp" class="b o">Salin</button></div>
+<textarea id="gt" hidden readonly></textarea>
+</div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const ACT={road:["Road Cycling","cycling-road",25,1],gravel:["Gravel Cycling","cycling-mountain",18,1.2],run:["Running","foot-walking",9,2],ultra:["Ultra Running","foot-hiking",7,2.5]};
+const IC={masjid:"🕌",spbu:"⛽",supermarket:"🛒",minimarket:"🏪"};
+let act="road",wps=[],mk=[],line=null,R=null,pois=[],rest={},busy=0,loopOn=false;
+const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
+const fm=m=>{m=Math.round(m);return String(Math.floor(m/60)%24).padStart(2,"0")+":"+String(m%60).padStart(2,"0")};
+const dur=m=>{m=Math.round(m);return Math.floor(m/60)+" j "+(m%60)+" m"};
+const hv=(a,b)=>{const r=Math.PI/180,x=(b[1]-a[1])*r,y=(b[0]-a[0])*r,q=Math.sin(x/2)**2+Math.cos(a[1]*r)*Math.cos(b[1]*r)*Math.sin(y/2)**2;return 12742*Math.asin(Math.sqrt(q))};
+const msg=t=>$("msg").textContent=t;
+const map=L.map("map",{zoomControl:false}).setView([-6.92,107.61],12);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
+const pl=L.layerGroup().addTo(map);
+map.on("click",e=>{wps.push([e.latlng.lat,e.latlng.lng]);draw()});
+try{$("key").value=localStorage.getItem("ors")||""}catch(e){}
+if(!$("key").value)$("kd").open=true;
+$("ksave").onclick=()=>{try{localStorage.setItem("ors",$("key").value.trim())}catch(e){}$("kd").open=false;msg("Key tersimpan. Ketuk peta untuk mulai.");route()};
+Object.keys(ACT).forEach(k=>{const b=document.createElement("button");b.className="chip"+(k===act?" on":"");b.textContent=ACT[k][0];b.onclick=()=>{act=k;[...$("chips").children].forEach(x=>x.classList.toggle("on",x===b));$("spd").placeholder=ACT[k][2];route()};$("chips").appendChild(b)});
+$("spd").placeholder=ACT[act][2];
+$("undo").onclick=()=>{wps.pop();draw()};
+$("clr").onclick=()=>{wps=[];draw()};
+$("lp").onclick=()=>{loopOn=!loopOn;$("lp").textContent="Loop: "+(loopOn?"aktif":"mati");route()};
+$("loc").onclick=()=>map.locate({setView:true,maxZoom:14});
+$("go").onclick=async()=>{const q=$("q").value.trim();if(!q)return;try{const r=await(await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=id&q="+encodeURIComponent(q))).json();r[0]?map.setView([+r[0].lat,+r[0].lon],13):msg("Tempat tidak ditemukan.")}catch(e){msg("Pencarian gagal. Coba lagi.")}};
+function draw(){
+  mk.forEach(m=>m.remove());
+  mk=wps.map((p,i)=>{const m=L.marker(p,{draggable:true,icon:L.divIcon({className:"",html:'<div class="wp'+(i?"":" s")+'"></div>',iconSize:[18,18]})}).addTo(map);
+    m.on("dragend",()=>{const q=m.getLatLng();wps[i]=[q.lat,q.lng];route()});return m});
+  route();
+}
+async function route(){
+  const my=++busy;
+  if(line){line.remove();line=null}pl.clearLayers();R=null;pois=[];rest={};
+  if(wps.length<2){show();return}
+  let key="";try{key=localStorage.getItem("ors")||""}catch(e){}
+  if(!key){msg("Isi API key OpenRouteService dulu (bagian atas).");$("kd").open=true;show();return}
+  msg("Menghitung rute mengikuti jalan...");
+  try{
+    const pts=wps.map(p=>[p[1],p[0]]);if(loopOn)pts.push(pts[0]);
+    const r=await fetch("https://api.openrouteservice.org/v2/directions/"+ACT[act][1]+"/geojson",{method:"POST",headers:{"Authorization":key,"Content-Type":"application/json"},body:JSON.stringify({coordinates:pts,elevation:true,radiuses:pts.map(()=>-1)})});
+    const j=await r.json();if(my!==busy)return;
+    if(!r.ok){const m=(j.error&&(j.error.message||j.error))||r.status;throw new Error(r.status===401||r.status===403?"API key salah atau kuota habis.":"Rute gagal: "+m)}
+    const f=j.features[0],c=f.geometry.coordinates,cd=[0];let mg=0,w=0,e0=c[0][2]||0,asc=0,desc=0;
+    for(let i=1;i<c.length;i++){const d=hv(c[i-1],c[i]);cd.push(cd[i-1]+d);w+=d;const de=(c[i][2]||0)-(c[i-1][2]||0);if(de>0)asc+=de;else desc-=de;if(w>=0.1){mg=Math.max(mg,Math.abs((c[i][2]||0)-e0)/(w*10));w=0;e0=c[i][2]||0}}
+    const p=f.properties;
+    R={c,cd,dist:p.summary.distance/1000,asc:p.ascent!=null?p.ascent:asc,desc:p.descent!=null?p.descent:desc,mg};
+    line=L.polyline(c.map(q=>[q[1],q[0]]),{color:"#c6f432",weight:5}).addTo(map);
+    if(wps.length===2)map.fitBounds(line.getBounds(),{padding:[30,30]});
+    msg("Rute siap. Mencari masjid, SPBU, dan toko di sepanjang rute...");show();
+    getPois(my);
+  }catch(e){if(my===busy){msg(e.message||"Gagal terhubung. Cek internet.");show()}}
+}
+async function getPois(my){
+  const c=R.c,st=Math.max(1,Math.floor(c.length/90)),a=[];
+  for(let i=0;i<c.length;i+=st)a.push(c[i][1].toFixed(5)+","+c[i][0].toFixed(5));
+  const ar="(around:350,"+a.join(",")+")";
+  const q="[out:json][timeout:25];(nwr"+ar+'["amenity"="place_of_worship"]["religion"="muslim"];nwr'+ar+'["amenity"="fuel"];nwr'+ar+'["shop"="supermarket"];nwr'+ar+'["shop"="convenience"];);out center 150;';
+  try{
+    const r=await fetch("https://overpass-api.de/api/interpreter",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"data="+encodeURIComponent(q)});
+    const j=await r.json();if(my!==busy)return;
+    const seen={},out=[];
+    j.elements.forEach(e=>{const t=e.tags||{},ty=t.amenity==="fuel"?"spbu":t.shop==="supermarket"?"supermarket":t.shop==="convenience"?"minimarket":"masjid",pos=e.lat!=null?[e.lat,e.lon]:e.center?[e.center.lat,e.center.lon]:null;if(!pos)return;
+      const n=t.name||({masjid:"Masjid/musala",spbu:"SPBU",supermarket:"Supermarket",minimarket:"Minimarket"})[ty],id=ty+n+pos[0].toFixed(3)+pos[1].toFixed(3);if(seen[id])return;seen[id]=1;
+      let bi=0,bd=1e9;for(let i=0;i<c.length;i+=2){const d=hv([pos[1],pos[0]],c[i]);if(d<bd){bd=d;bi=i}}
+      out.push({n,t:ty,pos,km:R.cd[bi],idx:bi})});
+    out.sort((x,y)=>x.idx-y.idx);pois=out.slice(0,60);
+    pois.forEach(p=>L.marker(p.pos,{icon:L.divIcon({className:"",html:'<div class="pm">'+IC[p.t]+"</div>",iconSize:[26,26]})}).bindPopup(esc(p.n)).addTo(pl));
+    msg(pois.length?"Rute dan fasilitas siap. Atur menit istirahat di daftar fasilitas.":"Rute siap. Tidak ada fasilitas ditemukan di dekat rute.");show();
+  }catch(e){if(my===busy){msg("Rute siap, tetapi fasilitas gagal dimuat (server sibuk). Coba geser titik sedikit untuk mengulang.");show()}}
+}
+function chart(){
+  const c=R.c,W=340,H=130,m=26,st=Math.max(1,Math.floor(c.length/200)),P=[];for(let i=0;i<c.length;i+=st)P.push(i);P.push(c.length-1);
+  const el=P.map(i=>c[i][2]||0),lo=Math.min(...el),hi=Math.max(...el),X=i=>m+R.cd[i]/(R.dist||1)*(W-2*m),Y=e=>H-20-(e-lo)/((hi-lo)||1)*(H-44);
+  const ln=P.map((i,k)=>(k?"L":"M")+X(i).toFixed(1)+" "+Y(el[k]).toFixed(1)).join("");
+  const t=(x,y,s,a)=>'<text x="'+x+'" y="'+y+'" font-size="10" fill="#8e968c"'+(a?' text-anchor="end"':"")+">"+s+"</text>";
+  return '<svg viewBox="0 0 '+W+" "+H+'"><path d="'+ln+"L"+X(c.length-1)+" "+(H-20)+"L"+m+" "+(H-20)+'Z" fill="#c6f43233"/><path d="'+ln+'" fill="none" stroke="#c6f432" stroke-width="2"/>'+t(4,14,Math.round(hi)+" m")+t(4,H-22,Math.round(lo)+" m")+t(m,H-4,"0 km")+t(W-m,H-4,R.dist.toFixed(1)+" km",1)+"</svg>";
+}
+function show(){
+  $("out").hidden=!R;if(!R)return;
+  $("sDist").textContent=R.dist.toFixed(1)+" km";$("sAsc").textContent=Math.round(R.asc)+" m";$("sDesc").textContent=Math.round(R.desc)+" m";
+  const sc=R.dist*ACT[act][3]/15+R.asc/250+R.mg/3,cat=sc<5?"Easy":sc<10?"Moderate":sc<16?"Hard":"Extreme";
+  $("dif").textContent="Tingkat kesulitan: "+cat;
+  $("why").textContent=R.dist.toFixed(1)+" km untuk "+ACT[act][0]+". Ascent "+Math.round(R.asc)+" m ("+(R.dist?(R.asc/R.dist).toFixed(0):0)+" m per km). Tanjakan terjal sekitar "+R.mg.toFixed(1)+"%. Jenis permukaan belum dinilai.";
+  $("chart").innerHTML=chart();
+  $("pinfo").textContent=pois.length?"Isi menit istirahat (0 = lewati). Data dari OpenStreetMap, bisa tidak lengkap.":"Menunggu data fasilitas...";
+  $("pl").innerHTML=pois.map((p,i)=>'<div class="pr"><span>'+IC[p.t]+" "+esc(p.n)+"<small>km "+p.km.toFixed(1)+' • tiba <span id="a'+i+'"></span></small></span><input type="number" min="0" data-i="'+i+'" value="'+(rest[i]||0)+'"></div>').join("");
+  upd();
+}
+function upd(){
+  if(!R)return;
+  const v=+$("spd").value>0?+$("spd").value:ACT[act][2],[h,m]=($("t0").value||"06:00").split(":").map(Number),s=h*60+m,mv=R.dist/v*60;let cum=0;
+  pois.forEach((p,i)=>{$("a"+i).textContent=fm(s+p.km/v*60+cum);cum+=rest[i]||0});
+  $("sMove").textContent=dur(mv);$("sRest").textContent=dur(cum);$("sFin").textContent=fm(s+mv+cum);
+}
+$("pl").addEventListener("input",e=>{rest[e.target.dataset.i]=Math.max(0,+e.target.value||0);upd()});
+$("spd").oninput=upd;$("t0").oninput=upd;
+function gpx(){
+  const x=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;"),nm="PACEPATH "+ACT[act][0];
+  return '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="PACEPATH" xmlns="http://www.topografix.com/GPX/1/1">\n<metadata><name>'+x(nm)+"</name></metadata>\n"
+   +pois.filter((p,i)=>rest[i]>0).map(p=>'<wpt lat="'+p.pos[0].toFixed(6)+'" lon="'+p.pos[1].toFixed(6)+'"><name>'+x(p.n)+"</name><type>"+p.t+"</type></wpt>").join("\n")
+   +"\n<trk><name>"+x(nm)+"</name><trkseg>\n"+R.c.map(q=>'<trkpt lat="'+q[1].toFixed(6)+'" lon="'+q[0].toFixed(6)+'"><ele>'+(q[2]||0).toFixed(1)+"</ele></trkpt>").join("\n")+"\n</trkseg></trk>\n</gpx>";
+}
+$("dl").onclick=()=>{const u=URL.createObjectURL(new Blob([gpx()],{type:"application/gpx+xml"})),a=document.createElement("a");a.href=u;a.download="pacepath.gpx";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000)};
+$("sh").onclick=async()=>{try{await navigator.share({files:[new File([gpx()],"pacepath.gpx",{type:"application/gpx+xml"})],title:"PACEPATH"})}catch(e){$("gt").hidden=false;$("gt").value=gpx()}};
+$("cp").onclick=async()=>{try{await navigator.clipboard.writeText(gpx());msg("GPX disalin.")}catch(e){$("gt").hidden=false;$("gt").value=gpx()}};
+</script></body></html>
