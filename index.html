@@ -86,7 +86,8 @@ async function route(){
   msg("Menghitung rute mengikuti jalan...");
   try{
     const pts=wps.map(p=>[p[1],p[0]]);if(loopOn)pts.push(pts[0]);
-    const r=await fetch("https://api.openrouteservice.org/v2/directions/"+ACT[act][1]+"/geojson",{method:"POST",headers:{"Authorization":key,"Content-Type":"application/json"},body:JSON.stringify({coordinates:pts,elevation:true,radiuses:pts.map(()=>-1)})});
+    const op={method:"POST",headers:{"Authorization":key,"Content-Type":"application/json"},body:JSON.stringify({coordinates:pts,elevation:true,radiuses:pts.map(()=>-1)})},pf="/v2/directions/"+ACT[act][1]+"/geojson";let r;
+    try{r=await fetch("https://api.heigit.org/openrouteservice"+pf,op)}catch(x){r=await fetch("https://api.openrouteservice.org"+pf,op)}
     const j=await r.json();if(my!==busy)return;
     if(!r.ok){const m=(j.error&&(j.error.message||j.error))||r.status;throw new Error(r.status===401||r.status===403?"API key salah atau kuota habis.":"Rute gagal: "+m)}
     const f=j.features[0],c=f.geometry.coordinates,cd=[0];let mg=0,w=0,e0=c[0][2]||0,asc=0,desc=0;
