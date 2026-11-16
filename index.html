@@ -25,10 +25,10 @@ details{background:var(--s1);border:1px solid var(--ln);border-radius:12px;paddi
 .pm{width:26px;height:26px;border-radius:50%;background:#0b0c0b;border:1.5px solid var(--lime);display:flex;align-items:center;justify-content:center;font-size:14px}
 textarea{width:100%;height:90px;background:var(--s2);color:var(--tx);border:1px solid var(--ln);border-radius:10px}
 </style></head><body>
-<header><h1>PACE<b>PATH</b></h1><span class="mu">Plan Your Route. Conquer Your Limits.</span></header>
+<header><h1>PACE<b>PATH</b></h1><span class="mu">Plan Your Route. Conquer Your Limits. v4</span></header>
 <div id="map"></div>
 <div id="panel">
-<details id="kd"><summary>API key OpenRouteService</summary>
+<details id="kd"><summary>API key OpenRouteService (opsional)</summary>
 <div class="row"><input id="key" placeholder="Tempel API key di sini"><button id="ksave" class="b">Simpan</button></div>
 <p class="mu">Key hanya tersimpan di browser HP ini dan hanya dikirim ke OpenRouteService.</p></details>
 <div class="row"><input id="q" placeholder="Cari tempat, mis. Lembang"><button id="go" class="b o">Cari</button><button id="loc" class="b o">📍</button></div>
@@ -82,21 +82,33 @@ async function route(){
   if(line){line.remove();line=null}pl.clearLayers();R=null;pois=[];rest={};
   if(wps.length<2){msg("Ketuk peta untuk titik awal, lalu titik berikutnya. Rute otomatis mengikuti jalan.");show();return}
   let key="";try{key=localStorage.getItem("ors")||""}catch(e){}
-  if(!key){msg("Isi API key OpenRouteService dulu (bagian atas).");$("kd").open=true;show();return}
   msg("Menghitung rute mengikuti jalan...");
   try{
     const pts=wps.map(p=>[p[1],p[0]]);if(loopOn)pts.push(pts[0]);
-    const op={method:"POST",headers:{"Authorization":key,"Content-Type":"application/json"},body:JSON.stringify({coordinates:pts,elevation:true,radiuses:pts.map(()=>-1)})},pf="/v2/directions/"+ACT[act][1]+"/geojson";let r;
-    try{r=await fetch("https://api.heigit.org/openrouteservice"+pf,op)}catch(x){r=await fetch("https://api.openrouteservice.org"+pf,op)}
-    const j=await r.json();if(my!==busy)return;
-    if(!r.ok){const m=(j.error&&(j.error.message||j.error))||r.status;throw new Error(r.status===401||r.status===403?"API key salah atau kuota habis.":"Rute gagal: "+m)}
-    const f=j.features[0],c=f.geometry.coordinates,cd=[0];let mg=0,w=0,e0=c[0][2]||0,asc=0,desc=0;
+    let c=null,dist=0,ascO=null,descO=null,src="";
+    if(key){try{
+      const op={method:"POST",headers:{"Authorization":key,"Content-Type":"application/json"},body:JSON.stringify({coordinates:pts,elevation:true,radiuses:pts.map(()=>-1)})},pf="/v2/directions/"+ACT[act][1]+"/geojson";let r;
+      try{r=await fetch("https://api.heigit.org/openrouteservice"+pf,op)}catch(x){r=await fetch("https://api.openrouteservice.org"+pf,op)}
+      const j=await r.json();if(!r.ok)throw new Error("ors");
+      const f=j.features[0];c=f.geometry.coordinates;dist=f.properties.summary.distance/1000;ascO=f.properties.ascent;descO=f.properties.descent;src="OpenRouteService";
+    }catch(x){c=null}}
+    if(!c){
+      const pr=(act==="run"||act==="ultra")?"routed-foot":"routed-bike";
+      const r=await fetch("https://routing.openstreetmap.de/"+pr+"/route/v1/driving/"+pts.map(q=>q[0].toFixed(6)+","+q[1].toFixed(6)).join(";")+"?overview=full&geometries=geojson");
+      const j=await r.json();if(!r.ok||!j.routes||!j.routes[0])throw new Error("Rute tidak ditemukan. Coba titik yang lebih dekat ke jalan.");
+      let g=j.routes[0].geometry.coordinates;dist=j.routes[0].distance/1000;
+      const st=Math.max(1,Math.ceil(g.length/400));g=g.filter((q,i)=>i%st===0||i===g.length-1);
+      const ev=[];for(let i=0;i<g.length;i+=100){const sl=g.slice(i,i+100),e=await fetch("https://api.open-meteo.com/v1/elevation?latitude="+sl.map(q=>q[1].toFixed(5)).join(",")+"&longitude="+sl.map(q=>q[0].toFixed(5)).join(","));ev.push(...(await e.json()).elevation)}
+      c=g.map((q,i)=>[q[0],q[1],ev[i]]);src="OpenStreetMap dan Open-Meteo, tanpa API key";
+    }
+    if(my!==busy)return;
+    let cd=[0],mg=0,w=0,e0=c[0][2]||0,asc=0,desc=0;
     for(let i=1;i<c.length;i++){const d=hv(c[i-1],c[i]);cd.push(cd[i-1]+d);w+=d;const de=(c[i][2]||0)-(c[i-1][2]||0);if(de>0)asc+=de;else desc-=de;if(w>=0.1){mg=Math.max(mg,Math.abs((c[i][2]||0)-e0)/(w*10));w=0;e0=c[i][2]||0}}
-    const p=f.properties;
-    R={c,cd,dist:p.summary.distance/1000,asc:p.ascent!=null?p.ascent:asc,desc:p.descent!=null?p.descent:desc,mg};
+    const kf=cd[cd.length-1]>0?dist/cd[cd.length-1]:1;cd=cd.map(v=>v*kf);
+    R={c,cd,dist,asc:ascO!=null?ascO:asc,desc:descO!=null?descO:desc,mg};
     line=L.polyline(c.map(q=>[q[1],q[0]]),{color:"#c6f432",weight:5}).addTo(map);
     if(wps.length===2)map.fitBounds(line.getBounds(),{padding:[30,30]});
-    msg("Rute siap. Mencari masjid, SPBU, dan toko di sepanjang rute...");show();
+    msg("Rute siap (sumber: "+src+"). Mencari masjid, SPBU, dan toko...");show();
     getPois(my);
   }catch(e){if(my===busy){msg(e.message||"Gagal terhubung. Cek internet.");show()}}
 }
